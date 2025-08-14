@@ -15,43 +15,16 @@
 //#include "arch/sys_arch.h"
 
 extern "C" {
-#include "driver/ledc.h"
-#include "i2c_periph.c"
-#include "driver/uart.h"
-#include "esp_err.h"
-#include "esp_timer.h"
-#include "hal/i2c_types.h"
-#include "mpu6050.h"
-#include "soc/gpio_num.h"
 
-void app_main(void);
+#include "esp_err.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "components_wrappers.h"
 }
 
-#define LEDC_TIMER              LEDC_TIMER_0
-#define LEDC_MODE               LEDC_LOW_SPEED_MODE
-#define PWM_IO_1          (5) // Define the output GPIO
-#define PWM_IO_2          (18) // Define the output GPIO
-#define PWM_IO_3          (19) // Define the output GPIO
-#define PWM_IO_4          (17) // Define the output GPIO
-#define LEDC_CHANNEL1            LEDC_CHANNEL_0
-#define LEDC_CHANNEL2            LEDC_CHANNEL_1
-#define LEDC_CHANNEL3            LEDC_CHANNEL_2
-#define LEDC_CHANNEL4            LEDC_CHANNEL_3
-#define LEDC_DUTY_RES           LEDC_TIMER_13_BIT // Set duty resolution to 13 bits
-#define LEDC_DUTY_MAX               (1638) // Set duty to 50%. (2 ** 13) * 50% = 4096
-#define LEDC_DUTY_MID               (1229) 
-#define LEDC_DUTY_MIN               (819) 
-#define LEDC_DUTY_RANGE             (819.0) 
-#define LEDC_FREQUENCY          	(100) // Frequency in Hertz. Set frequency at 100 Hz
-#define LEDC_DELAY_IN_US          	(2000)
 #define RELATIVE_DUTY(p)		(int)(( 100.0 + p ) * (LEDC_DUTY_RANGE)/100)
 
 uint32_t dutycycles[]={LEDC_DUTY_MID,LEDC_DUTY_MAX,LEDC_DUTY_MID,LEDC_DUTY_MIN} ;
-static mpu6050_handle_t mpu6050_dev = NULL;
-static mpu6050_acce_value_t acce;
-static mpu6050_gyro_value_t gyro;
-static mpu6050_gyro_value_t gyro_calibration = {3.495, -6.095, -1.057};
-static complimentary_angle_t complimentary_angle;
 uint32_t goal_duty;
 
 TaskHandle_t xTestTaskHandle = NULL;
@@ -60,128 +33,12 @@ TaskHandle_t xMotorTaskHandle = NULL;
 TaskHandle_t xMotorFadeTaskHandle = NULL;
 uint8_t newdata;
 
-static void esc_ledc_init(void)
-{
-    // Prepare and then apply the LEDC PWM timer configuration
-    ledc_timer_config_t ledc_timer = {
-        .speed_mode       = LEDC_MODE,
-        .duty_resolution  = LEDC_DUTY_RES,
-        .timer_num        = LEDC_TIMER,
-        .freq_hz          = LEDC_FREQUENCY,  // Set output frequency at 4 kHz
-        .clk_cfg          = LEDC_AUTO_CLK,
-        .deconfigure      = 0
-    };
-    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
-    // Prepare and then apply the LEDC PWM channel configuration
-    ledc_channel_config_t pwm_channel1 = {
-        .gpio_num       = PWM_IO_1,
-        .speed_mode     = LEDC_MODE,
-        .channel        = LEDC_CHANNEL1,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .timer_sel      = LEDC_TIMER,
-        .duty           = 819, // Set duty to 0%
-        .hpoint         = 0,
-        .flags          = 0
-    };
-    ledc_channel_config_t pwm_channel2 = {
-        .gpio_num       = PWM_IO_2,
-        .speed_mode     = LEDC_MODE,
-        .channel        = LEDC_CHANNEL2,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .timer_sel      = LEDC_TIMER,
-        .duty           = 819, // Set duty to 0%
-        .hpoint         = 0,
-        .flags          = 0
-    };
-    ledc_channel_config_t pwm_channel3 = {
-        .gpio_num       = PWM_IO_3,
-        .speed_mode     = LEDC_MODE,
-        .channel        = LEDC_CHANNEL3,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .timer_sel      = LEDC_TIMER,
-        .duty           = 819, // Set duty to 0%
-        .hpoint         = 0,
-        .flags          = 0
-    };
-    ledc_channel_config_t pwm_channel4 = {
-        .gpio_num       = PWM_IO_4,
-        .speed_mode     = LEDC_MODE,
-        .channel        = LEDC_CHANNEL4,
-        .intr_type      = LEDC_INTR_DISABLE,
-        .timer_sel      = LEDC_TIMER,
-        .duty           = 819, // Set duty to 0%
-        .hpoint         = 0,
-        .flags          = 0
-    };
-    ESP_ERROR_CHECK(ledc_channel_config(&pwm_channel1));
-    ESP_ERROR_CHECK(ledc_channel_config(&pwm_channel2));
-    ESP_ERROR_CHECK(ledc_channel_config(&pwm_channel3));
-    ESP_ERROR_CHECK(ledc_channel_config(&pwm_channel4));
-}
+extern "C" void app_main(void);
 
-static void mpu6050_init()
-{
-    mpu6050_dev = mpu6050_create(I2C_NUM_0, MPU6050_I2C_ADDRESS);
-    mpu6050_config(mpu6050_dev, ACCE_FS_4G, GYRO_FS_500DPS);
-    mpu6050_wake_up(mpu6050_dev);
-}
-static void mpu6050_read()
-{    
-    mpu6050_get_acce(mpu6050_dev, &acce);
-    mpu6050_get_gyro(mpu6050_dev, &gyro);
-    
-    gyro.gyro_x -= gyro_calibration.gyro_x;
-    gyro.gyro_y -= gyro_calibration.gyro_y;
-    gyro.gyro_z -= gyro_calibration.gyro_z;
 
-    // mpu6050_complimentory_filter(mpu6050_dev, &acce, &gyro, &complimentary_angle);
 
-}
 
-static bool i2c_initialized = false;
-esp_err_t i2c_init(void)
-{
-    /* I2C was initialized before */
-    if (i2c_initialized) {
-        return ESP_OK;
-    }
-
-    const i2c_config_t i2c_conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = GPIO_NUM_6,
-        .scl_io_num = GPIO_NUM_7,
-        .sda_pullup_en = GPIO_PULLUP_DISABLE,
-        .scl_pullup_en = GPIO_PULLUP_DISABLE,
-        .master = {.clk_speed = 400000},
-        .clk_flags = 0
-    };
-    ESP_ERROR_CHECK(i2c_param_config(I2C_NUM_0, &i2c_conf));
-    ESP_ERROR_CHECK(i2c_driver_install(I2C_NUM_0, i2c_conf.mode,
-    									 0, 0, 0));
-
-    i2c_initialized = true;
-
-    return ESP_OK;
-}
-
-void setPin1Duty(uint32_t duty){
-	    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL1, duty));
-	    // Update duty to apply the new value
-	    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL1));	
-}
-
-void setAllPinDuty(uint32_t d1,uint32_t d2,uint32_t d3,uint32_t d4){
-	    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL1, d1));
-	    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL2, d2));
-	    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL3, d3));
-	    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL4, d4));
-	    // Update duty to apply the new value
-	    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL1));
-	    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL2));
-	    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL3));
-	    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL4));	
-}
 
 void vTestTaskCode( void * pvParameters ){		
 
@@ -307,8 +164,7 @@ void vMotorFadeTaskCode( void * pvParameters )
 void app_main(void)
 {
 	// Set the LEDC peripheral configuration
-    esc_ledc_init();
-	i2c_init();
+    motor_init();
     mpu6050_init();
     
     static uint8_t ucParameterToPass;
