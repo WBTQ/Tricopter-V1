@@ -16,6 +16,7 @@
 
 extern "C" {
 
+#include "mpu6050.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -24,9 +25,14 @@ extern "C" {
 
 #define RELATIVE_DUTY(p)		(int)(( 100.0 + p ) * (LEDC_DUTY_RANGE)/100)
 
+static mpu6050_acce_value_t acce;
+static mpu6050_gyro_value_t gyro;
+static complimentary_angle_t complimentary_angle;
+
 uint32_t dutycycles[]={LEDC_DUTY_MID,LEDC_DUTY_MAX,LEDC_DUTY_MID,LEDC_DUTY_MIN} ;
 uint32_t goal_duty;
 
+esp_timer_handle_t sensor_timer;
 TaskHandle_t xTestTaskHandle = NULL;
 TaskHandle_t xSensorTaskHandle = NULL;
 TaskHandle_t xMotorTaskHandle = NULL;
@@ -43,22 +49,16 @@ extern "C" void app_main(void);
 void vTestTaskCode( void * pvParameters ){		
 
 }
-void timerCallbackSensor(void *pvParameters) {
+void timerCallbackSensor(void *arg) {
     newdata = 1;
+    xTaskNotifyFromISR(xSensorTaskHandle,0,eNoAction,0);
 }
 void vSensorTaskCode( void * pvParameters )
 {
 	// In order to get accurate calculation of complimentary angle we need fast reading (5ms)
     // FreeRTOS resolution is slow, so esp_timer is used
-    const esp_timer_create_args_t cal_timer_config = {
-        .callback = timerCallbackSensor,
-        .arg = NULL,
-        .dispatch_method = ESP_TIMER_TASK,
-        .name = "MPU6050 timer",
-        .skip_unhandled_events = true};
-    esp_timer_handle_t cal_timer = NULL;
-    esp_timer_create(&cal_timer_config, &cal_timer);
-    esp_timer_start_periodic(cal_timer, 1000000); // 5ms
+
+    periodic_timer(CL_PERIOD, timerCallbackSensor, &sensor_timer);
     
     ekf_imu13states *ekf13 = new ekf_imu13states();
     ekf13->Init();
@@ -117,24 +117,16 @@ void vSensorTaskCode( void * pvParameters )
 		// printf("d %d \n \n", (int)(angle_duty));
 
         float cal_x, cal_y, cal_z;
-        for(int i=0;i<1000;i++){
-            while (!newdata){}
+
+        xTaskNotifyWait(0,ULONG_MAX,0,pdMS_TO_TICKS(1));
             mpu6050_read();
-            cal_x += gyro.gyro_x;
-            cal_y += gyro.gyro_y;
-            cal_z += gyro.gyro_z;
-    }
-        // printf("%f ", acce.acce_x);
-		// printf("%f ", acce.acce_y);
-		// printf("%f ", acce.acce_z);
+
+        printf("%f ", acce.acce_x);
+        printf("%f ", acce.acce_y);
+        printf("%f ", acce.acce_z);
 		printf("%f ", gyro.gyro_x );
 		printf("%f ", gyro.gyro_y);
-		printf("%f ", gyro.gyro_z);
-        
-		// printf("%f ", gyro.gyro_x);
-		// printf("%f ", gyro.gyro_y);
-		// printf("%f ", gyro.gyro_z);
-		
+		printf("%f ", gyro.gyro_z);		
 		printf("\n");
 		
 		// vTaskDelay(200 / portTICK_PERIOD_MS);

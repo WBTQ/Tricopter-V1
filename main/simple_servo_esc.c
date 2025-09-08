@@ -1,6 +1,6 @@
 #include "components_wrappers.h"
 
-#include "ledc.h"
+#include "driver/ledc.h"
 #include "iot_servo.h"
 
 
@@ -66,7 +66,7 @@ static void esc_ledc_init(void)
         .timer_sel      = LEDC_TIMER,
         .duty           = 819, // Set duty to 0%
         .hpoint         = 0,
-        .flags          = 0
+        .flags          = {}
     };
     ledc_channel_config_t pwm_channel2 = {
         .gpio_num       = PWM_IO_2,
@@ -76,7 +76,7 @@ static void esc_ledc_init(void)
         .timer_sel      = LEDC_TIMER,
         .duty           = 819, // Set duty to 0%
         .hpoint         = 0,
-        .flags          = 0
+        .flags          = {}
     };
     ledc_channel_config_t pwm_channel3 = {
         .gpio_num       = PWM_IO_3,
@@ -86,7 +86,7 @@ static void esc_ledc_init(void)
         .timer_sel      = LEDC_TIMER,
         .duty           = 819, // Set duty to 0%
         .hpoint         = 0,
-        .flags          = 0
+        .flags          = {}
     };
     ledc_channel_config_t pwm_channel4 = {
         .gpio_num       = PWM_IO_4,
@@ -96,7 +96,7 @@ static void esc_ledc_init(void)
         .timer_sel      = LEDC_TIMER,
         .duty           = 819, // Set duty to 0%
         .hpoint         = 0,
-        .flags          = 0
+        .flags          = {}
     };
     ESP_ERROR_CHECK(ledc_channel_config(&pwm_channel1));
     ESP_ERROR_CHECK(ledc_channel_config(&pwm_channel2));

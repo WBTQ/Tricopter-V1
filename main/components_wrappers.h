@@ -2,9 +2,12 @@
 #define COMPONENT_WRAPPER_H
 
 
+#include "esp_timer.h"
 #include "mpu6050.h"
 #include "soc/gpio_num.h"
 
+
+#define CL_PERIOD          	(1000000) // Closed loop period in microseconds.
 
 #define LEDC_TIMER              LEDC_TIMER_0
 #define LEDC_MODE               LEDC_LOW_SPEED_MODE
@@ -26,8 +29,12 @@
 
 extern void mpu6050_init();
 extern void mpu6050_read();
-static void motor_init();
+extern void motor_init();
+extern void periodic_timer(int period_us, esp_timer_cb_t callbackFunction, esp_timer_handle_t *timerHandle);
+extern void delay_timer(int period_us, esp_timer_cb_t callbackFunction);
+extern void setAllPinDuty(uint32_t d1,uint32_t d2,uint32_t d3,uint32_t d4);
+extern void setPin1Duty(uint32_t duty);
 
 
 
-#endif COMPONENT_WRAPPER_H
+#endif //COMPONENT_WRAPPER_H
